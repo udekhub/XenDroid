@@ -43,7 +43,7 @@ jobs:
           java-version: "21"
 
       - name: Set up Android SDK command-line tools
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
 
       - name: Verify project Gradle wrapper
         shell: bash
