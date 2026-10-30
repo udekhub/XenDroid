@@ -42,10 +42,20 @@ jobs:
           distribution: temurin
           java-version: "21"
 
+      - name: Verify project Gradle wrapper
+        shell: bash
+        run: |
+          printf '%s  %s\n' \
+            'e996d452d2645e70c01c11143ca2d3742734a28da2bf61f25c82bdc288c9e637' \
+            'gradle/wrapper/gradle-wrapper.jar' | sha256sum --check --strict
+
       - name: Configure Gradle cache
         uses: gradle/actions/setup-gradle@v4
         with:
           cache-read-only: false
+          # Recursive submodules contain their own unused Gradle wrappers.
+          # The project wrapper used by this build is pinned and checked above.
+          validate-wrappers: false
 
       - name: Install host build tools
         run: |
