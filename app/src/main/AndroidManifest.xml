@@ -1,9 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- Network: core's Application/native may probe; matches legacy :app. -->
-    <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- Deliberately no INTERNET or ACCESS_NETWORK_STATE permission. -->
     <!-- Legacy storage (maxSdkVersion guards: SAF is the real path on 29+). -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
@@ -26,7 +24,7 @@
          profile), and EAGER Emulator.load_library() on non-delay devices (Adreno 830). -->
     <application
         android:name="xendroid.compose.Application"
-        android:allowBackup="true"
+        android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:supportsRtl="true"
@@ -54,23 +52,12 @@
         <activity
             android:name="xendroid.compose.EmulatorHostActivity"
             android:process=":emu"
-            android:exported="true"
+            android:exported="false"
             android:launchMode="singleTask"
             android:screenOrientation="sensorLandscape"
             android:configChanges="layoutDirection|locale|orientation|uiMode|screenLayout|screenSize|smallestScreenSize|keyboard|keyboardHidden|navigation"
             android:windowSoftInputMode="adjustNothing"
-            android:theme="@style/Theme.xendroidEmu">
-            <!-- In-app launch: GameLibraryViewModel.buildLaunchIntent (xendroid + setPackage). -->
-            <intent-filter>
-                <action android:name="xendroid.intent.action.xendroid" />
-                <category android:name="android.intent.category.DEFAULT" />
-            </intent-filter>
-            <!-- Pinned-shortcut cold start: createShortcut sets action = ACTION_VIEW. -->
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-            </intent-filter>
-        </activity>
+            android:theme="@style/Theme.xendroidEmu" />
         <!-- No android:process on purpose: must land in the main process. -->
         <service
             android:name="xendroid.compose.core.MainAliveService"

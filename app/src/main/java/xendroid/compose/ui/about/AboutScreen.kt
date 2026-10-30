@@ -15,7 +15,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import xendroid.compose.Emulator
 
-private const val TITLE = "Xendroid — Xbox 360 emulation on Android."
+private const val TITLE = "Offline Android build based on XenDroid/Xenia. No Internet permission or telemetry."
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -51,7 +51,7 @@ fun AboutScreen(onBack: () -> Unit) {
             Modifier.fillMaxSize().padding(padding).padding(16.dp)
                 .verticalScroll(rememberScrollState()),
         ) {
-            Text("xendroid", style = MaterialTheme.typography.headlineSmall)
+            Text("UDEK 360 Offline", style = MaterialTheme.typography.headlineSmall)
             Text("Version $versionName", style = MaterialTheme.typography.bodyMedium)
             Spacer(Modifier.height(16.dp))
 

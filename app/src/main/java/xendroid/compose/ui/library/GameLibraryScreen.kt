@@ -2,7 +2,6 @@ package xendroid.compose.ui.library
 
 import android.app.Activity
 import android.content.Context
-import android.util.Log
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -27,7 +26,6 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import xendroid.compose.core.AllFilesAccess
 import xendroid.compose.core.EmuProcessLink
@@ -36,14 +34,6 @@ import xendroid.compose.data.GameFormat
 import xendroid.compose.ui.compress.GameCompressViewModel
 import xendroid.compose.ui.compress.GameCompressViewModel.CompressState
 import xendroid.compose.ui.userdata.openUserData
-import xendroid.compose.updater.CooldownDialog
-import xendroid.compose.updater.getRemainingCooldown
-import xendroid.compose.updater.LatestVersionDialog
-import xendroid.compose.updater.UpdateDialog
-import xendroid.compose.updater.UpdateResult
-import xendroid.compose.updater.checkForUpdates
-import xendroid.compose.updater.shouldCheckForUpdates
-import xendroid.compose.updater.saveLastCheck
 
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -65,7 +55,6 @@ fun GameLibraryScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var updateResult by remember { mutableStateOf<UpdateResult?>(null) }
 
     var pendingGame by remember { mutableStateOf<Game?>(null) }
     // A disc whose content is not installed yet; the launch waits on the answer.
@@ -159,18 +148,6 @@ fun GameLibraryScreen(
                             onClick = { menuOpen = false; onOpenAbout() },
                         )
 
-                        DropdownMenuItem(
-                            text = { Text("Check for Updates") },
-                            onClick = {
-                                menuOpen = false
-
-                                checkForUpdatesClicked(
-                                    context = context,
-                                    scope = scope,
-                                    onResult = { updateResult = it }
-                                )
-                            }
-                        )
                     }
                 }
             )
@@ -225,31 +202,6 @@ fun GameLibraryScreen(
             }
         }
         }
-    }
-
-   when (val result = updateResult) {
-        is UpdateResult.Available -> {
-            UpdateDialog(
-                release = result.release,
-                onDismiss = { updateResult = null }
-            )
-        }
-
-        is UpdateResult.Latest -> {
-            LatestVersionDialog(
-                commitHash = result.commitHash,
-                onDismiss = { updateResult = null }
-            )
-        }
-
-        is UpdateResult.Cooldown -> {
-            CooldownDialog(
-                remainingMillis = result.remainingMillis,
-                onDismiss = { updateResult = null }
-            )
-        }
-
-        null -> {}
     }
 
     pendingDiscInstall?.let { (game, count) ->
@@ -376,15 +328,6 @@ fun GameLibraryScreen(
                     )
                 }
 
-                if (viewModel.canLaunchGames && viewModel.isPinShortcutSupported) {
-                    ListItem(
-                        headlineContent = { Text("Create shortcut") },
-                        modifier = Modifier.clickable {
-                            viewModel.createShortcut(game)
-                            dismiss()
-                        },
-                    )
-                }
             }
         }
     }
@@ -562,28 +505,6 @@ private fun NoVulkanDialog(onQuit: () -> Unit) {
         title = { Text("Unsupported device") },
         text = { Text("This device has no Vulkan GPU; the emulator cannot run.") },
     )
-}
-
-fun checkForUpdatesClicked(
-    context: Context,
-    scope: CoroutineScope,
-    onResult: (UpdateResult) -> Unit
-) {
-    scope.launch {
-        if (!shouldCheckForUpdates(context)) {
-            Log.d("Updater", "Skipping update check")
-            onResult(UpdateResult.Cooldown(getRemainingCooldown(context)))
-            return@launch
-        }
-
-        try {
-            val result = checkForUpdates()
-            saveLastCheck(context)
-            onResult(result)
-        } catch (e: Exception) {
-            Log.e("Updater", "Failed to check updates", e)
-        }
-    }
 }
 
 /** Same shape as the content-install formatter, which is private to that file. */

@@ -1,0 +1,150 @@
+name: Build UDEK 360 Offline
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: udek-360-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  ANDROID_API_LEVEL: "35"
+  ANDROID_BUILD_TOOLS: "35.0.0"
+  ANDROID_NDK_VERSION: "29.0.14206865"
+  ANDROID_CMAKE_VERSION: "3.30.3"
+  GRADLE_OPTS: -Dorg.gradle.daemon=false -Dorg.gradle.jvmargs=-Xmx5g
+  USE_CCACHE: "true"
+  CCACHE_DIR: ${{ github.workspace }}/.ccache
+  CCACHE_COMPILERCHECK: content
+
+jobs:
+  build:
+    name: Compile signed release APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+
+    steps:
+      - name: Checkout source and submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Configure Gradle cache
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: false
+
+      - name: Install host build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            ccache glslang-tools ninja-build python3 spirv-tools
+
+      - name: Install Android SDK components
+        shell: bash
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager \
+            "platform-tools" \
+            "platforms;android-${ANDROID_API_LEVEL}" \
+            "build-tools;${ANDROID_BUILD_TOOLS}" \
+            "ndk;${ANDROID_NDK_VERSION}" \
+            "cmake;${ANDROID_CMAKE_VERSION}"
+          printf 'sdk.dir=%s\ncmake.dir=%s\n' \
+            "$ANDROID_SDK_ROOT" \
+            "$ANDROID_SDK_ROOT/cmake/${ANDROID_CMAKE_VERSION}" \
+            > local.properties
+
+      - name: Restore native compiler cache
+        uses: actions/cache@v4
+        with:
+          path: .ccache
+          key: ${{ runner.os }}-xendroid-ndk29-${{ hashFiles('**/*.gradle', '**/*.gradle.kts', 'gradle/libs.versions.toml', '.gitmodules') }}
+          restore-keys: |
+            ${{ runner.os }}-xendroid-ndk29-
+
+      - name: Verify offline security policy
+        run: bash scripts/verify_offline.sh
+
+      - name: Compile release
+        id: compile
+        shell: bash
+        run: |
+          chmod +x gradlew
+          GIT_HASH="$(git rev-parse --short HEAD)"
+          ./gradlew :app:assembleRelease \
+            -PgitHash="$GIT_HASH" \
+            --build-cache \
+            --parallel \
+            --stacktrace \
+            --no-daemon
+
+      - name: Sign and name APK
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          APK="$(find app/build/outputs/apk/release -maxdepth 1 -type f -name '*.apk' | head -n 1)"
+          test -n "$APK"
+
+          if [[ -n "${ANDROID_KEYSTORE_BASE64:-}" && -n "${KEY_ALIAS:-}" \
+                && -n "${KEYSTORE_PASSWORD:-}" && -n "${KEY_PASSWORD:-}" ]]; then
+            printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/release.jks"
+            KS="$RUNNER_TEMP/release.jks"
+            ALIAS="$KEY_ALIAS"
+            STORE_PASS="$KEYSTORE_PASSWORD"
+            KEY_PASS="$KEY_PASSWORD"
+          else
+            KS="$RUNNER_TEMP/udek360-ci.jks"
+            ALIAS="udek360"
+            STORE_PASS="android"
+            KEY_PASS="android"
+            keytool -genkeypair -v \
+              -keystore "$KS" -storepass "$STORE_PASS" -keypass "$KEY_PASS" \
+              -alias "$ALIAS" -keyalg RSA -keysize 4096 -validity 10000 \
+              -dname "CN=UDEK 360 Offline, OU=CI, O=UDEK, C=MX"
+            echo "::warning::APK signed with a temporary CI key. Configure signing secrets for upgrade-compatible releases."
+          fi
+
+          ZIPALIGN="$ANDROID_SDK_ROOT/build-tools/$ANDROID_BUILD_TOOLS/zipalign"
+          APKSIGNER="$ANDROID_SDK_ROOT/build-tools/$ANDROID_BUILD_TOOLS/apksigner"
+          "$ZIPALIGN" -f -p 4 "$APK" "$RUNNER_TEMP/xendroid-release-aligned.apk"
+          "$APKSIGNER" sign \
+            --ks "$KS" \
+            --ks-key-alias "$ALIAS" \
+            --ks-pass "pass:$STORE_PASS" \
+            --key-pass "pass:$KEY_PASS" \
+            --out dist/xendroid-release.apk \
+            "$RUNNER_TEMP/xendroid-release-aligned.apk"
+          "$APKSIGNER" verify --verbose --print-certs dist/xendroid-release.apk
+          sha256sum dist/xendroid-release.apk > dist/xendroid-release.apk.sha256
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: xendroid-release.apk
+          path: |
+            dist/xendroid-release.apk
+            dist/xendroid-release.apk.sha256
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
+

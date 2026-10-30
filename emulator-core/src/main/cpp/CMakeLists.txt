@@ -130,7 +130,6 @@ target_link_libraries(emu
         capstone
         fmt
         dxbc
-        discord-rpc
         glslang-spirv
         imgui
         libavcodec

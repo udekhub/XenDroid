@@ -19,7 +19,7 @@
 #include "xenia/kernel/xthread.h"
 #include "xenia/xbox.h"
 
-DEFINE_bool(network_enabled, true,
+DEFINE_bool(network_enabled, false,
             "Let titles open host sockets. The XNet address and session layer "
             "is stubbed, so guest traffic cannot reach a peer, but titles that "
             "do not check for socket creation failure crash outright when this "
@@ -676,7 +676,10 @@ dword_result_t NetDll_socket_entry(dword_t caller, dword_t af, dword_t type,
   XELOGI("NetDll_socket: af={}, type={}, protocol={}", af.value(), type.value(),
          protocol.value());
 
-  if (!cvars::network_enabled) {
+  // UDEK 360 Offline: this Android build never creates host sockets, even if a
+  // copied configuration file attempts to enable the upstream networking cvar.
+  constexpr bool kNetworkDisabledByBuild = true;
+  if (kNetworkDisabledByBuild || !cvars::network_enabled) {
     XThread::SetLastError(uint32_t(X_WSAError::X_WSAENETDOWN));
     XELOGI("NetDll_socket: refused, network_enabled is off");
     return -1;

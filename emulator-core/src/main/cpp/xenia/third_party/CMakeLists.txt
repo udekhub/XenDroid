@@ -122,6 +122,7 @@ target_include_directories(dxbc PUBLIC dxbc)
 # ==============================================================================
 # discord-rpc
 # ==============================================================================
+if(NOT ANDROID)
 add_library(discord-rpc STATIC
   discord-rpc/src/connection.h
   discord-rpc/src/discord_rpc.cpp
@@ -153,6 +154,7 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     discord-rpc/src/connection_unix.cpp
     discord-rpc/src/discord_register_linux.cpp
   )
+endif()
 endif()
 
 # ==============================================================================

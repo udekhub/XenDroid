@@ -3,15 +3,10 @@ package xendroid.compose.ui.library
 import xendroid.compose.core.R
 import android.content.Context
 import android.content.Intent
-import android.content.pm.ShortcutInfo
-import android.content.pm.ShortcutManager
-import android.graphics.BitmapFactory
-import android.graphics.drawable.Icon
-import android.os.Build
 import android.os.SystemClock
-import androidx.core.content.getSystemService
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import xendroid.compose.EmulatorHostActivity
 import xendroid.compose.core.EmulatorRuntime
 import xendroid.compose.core.ContentPaths
 import java.io.File
@@ -29,9 +24,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/** The launch action emitted on game tap. Resolves once a host Activity registers
- *  for this action; until then the Intent will not resolve (no-op resolveActivity). */
-const val ACTION_LAUNCH_GAME = "xendroid.intent.action.xendroid"
 const val EXTRA_GAME_URI = "game_uri"
 const val EXTRA_DISC_LABELS = "disc_labels"
 const val EXTRA_DISC_PATHS = "disc_paths"
@@ -153,8 +145,7 @@ class GameLibraryViewModel(
         }
 
     fun buildLaunchIntent(game: Game): Intent =
-        Intent(ACTION_LAUNCH_GAME).apply {
-            setPackage(appContext.packageName)          // self; host is in this app
+        Intent(appContext, EmulatorHostActivity::class.java).apply {
             putExtra(EXTRA_GAME_URI, game.launchUri)
             // :emu cannot read the library, so the discs travel with the launch.
             val discs = discsOfTitle(game)
@@ -194,38 +185,4 @@ class GameLibraryViewModel(
         else R.drawable.app_icon
     }
 
-    val isPinShortcutSupported: Boolean
-        get() = appContext.getSystemService<ShortcutManager>()
-            ?.isRequestPinShortcutSupported == true
-
-    /** True once a host Activity resolves the launch action.
-     *  Until then, suppress launch-dependent affordances so we never pin a dead shortcut. */
-    val canLaunchGames: Boolean
-        get() = Intent(ACTION_LAUNCH_GAME)
-            .setPackage(appContext.packageName)
-            .resolveActivity(appContext.packageManager) != null
-
-    /** Pin a launcher shortcut. Stable id = game.stableId (uri) to avoid name
-     *  collisions (legacy used the display name -> collisions). */
-    fun createShortcut(game: Game) {
-        if (!isPinShortcutSupported || Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
-        val sm = appContext.getSystemService<ShortcutManager>() ?: return
-        val intent = buildLaunchIntent(game).apply { action = Intent.ACTION_VIEW }
-        // No resolving host yet; don't pin a shortcut that goes nowhere.
-        if (intent.resolveActivity(appContext.packageManager) == null) return
-        val icon = game.iconCacheName
-            ?.let { iconCache.fileFor(it) }
-            ?.takeIf { it.exists() }
-            ?.let { BitmapFactory.decodeFile(it.absolutePath) }
-            ?.let { Icon.createWithBitmap(it) }
-            ?: Icon.createWithResource(appContext, R.drawable.app_icon)
-        sm.requestPinShortcut(
-            ShortcutInfo.Builder(appContext, game.stableId)
-                .setShortLabel(game.name)
-                .setIcon(icon)
-                .setIntent(intent)
-                .build(),
-            null
-        )
-    }
 }

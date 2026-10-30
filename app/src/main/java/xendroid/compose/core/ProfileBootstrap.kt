@@ -6,7 +6,7 @@ import xendroid.compose.settings.Setting
 import xendroid.compose.settings.SettingsSchema
 
 object ProfileBootstrap {
-    private const val DEFAULT_GAMERTAG = "XenDroid"
+    private const val DEFAULT_GAMERTAG = "UDEK360"
 
     @Volatile private var ensured = false
 
